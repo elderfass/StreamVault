@@ -1,0 +1,19 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.JoeMovies" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">#E5A645</item>
+        <item name="colorPrimaryVariant">#B88537</item>
+        <item name="colorOnPrimary">#000000</item>
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">#E5A645</item>
+        <item name="colorSecondaryVariant">#B88537</item>
+        <item name="colorOnSecondary">#000000</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">#0F0F0F</item>
+        <!-- Background colors -->
+        <item name="android:windowBackground">#0F0F0F</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <!-- Customize your theme here. -->
+    </style>
+</resources>
