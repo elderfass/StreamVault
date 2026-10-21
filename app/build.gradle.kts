@@ -41,6 +41,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
+    implementation(libs.play.services.location)
 
     implementation(libs.activity.ktx)
     implementation(libs.appcompat)

@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Cines y Estrenos - Leaflet</title>
-    <!-- Leaflet CSS y JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -12,67 +11,59 @@
         body, html { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         #map { width: 100%; height: 100%; background: #121212; }
 
-        /* Popups personalizados estilo M3 Dark */
         .leaflet-popup-content-wrapper {
-            background: #1e1e1e;
-            color: #ffffff;
-            border-radius: 12px;
-            padding: 4px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-            border: 1px solid #333333;
+            background: #1e1e1e; color: #ffffff; border-radius: 12px; padding: 4px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5); border: 1px solid #333333;
         }
-        .leaflet-popup-tip {
-            background: #1e1e1e;
-        }
-        .cine-popup {
-            padding: 8px 10px;
-        }
-        .cine-popup h3 {
-            font-size: 16px;
-            color: #E5A645;
-            margin-bottom: 6px;
-            font-weight: 700;
-        }
-        .cine-popup p {
-            font-size: 13px;
-            color: #cccccc;
-            margin-bottom: 4px;
-            line-height: 1.4;
-        }
+        .leaflet-popup-tip { background: #1e1e1e; }
+        .cine-popup { padding: 8px 10px; }
+        .cine-popup h3 { font-size: 16px; color: #E5A645; margin-bottom: 6px; font-weight: 700; }
+        .cine-popup p { font-size: 13px; color: #cccccc; margin-bottom: 4px; line-height: 1.4; }
         .cine-popup .badge-horario {
-            display: inline-block;
-            background: #332714;
-            color: #E5A645;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 4px;
-            border: 1px solid #E5A645;
+            display: inline-block; background: #332714; color: #E5A645; padding: 3px 8px;
+            border-radius: 6px; font-size: 12px; font-weight: 600; margin-top: 4px; border: 1px solid #E5A645;
         }
+        .btn {
+            border: none; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 700;
+            background: #E5A645; color: #000; cursor: pointer;
+        }
+        .btn-ruta { width: 100%; margin-top: 10px; }
+        .btn-sec { background: #333; color: #fff; }
+
+        #routeBar {
+            position: fixed; left: 12px; right: 12px; bottom: 16px; z-index: 1000;
+            display: none; align-items: center; justify-content: space-between; gap: 10px;
+            background: #1e1e1e; color: #fff; border: 1px solid #333; border-radius: 14px;
+            padding: 10px 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); font-size: 14px; line-height: 1.4;
+        }
+        #routeBar .actions { display: flex; gap: 8px; flex-shrink: 0; }
     </style>
 </head>
 <body>
     <div id="map"></div>
 
-    <script>
-        // Inicializar mapa centrado en Colombia / Valledupar - Aguachica
-        var map = L.map('map', {
-            zoomControl: false
-        }).setView([8.3075, -73.6180], 12);
+    <div id="routeBar">
+        <div id="routeInfo"></div>
+        <div class="actions">
+            <button class="btn" onclick="navegarExterno()">Navegar</button>
+            <button class="btn btn-sec" onclick="limpiarRuta()">✕</button>
+        </div>
+    </div>
 
-        // Añadir controles de zoom en la esquina superior derecha
+    <script>
+        var map = L.map('map', { zoomControl: false }).setView([8.3075, -73.6180], 12);
         L.control.zoom({ position: 'topright' }).addTo(map);
 
-        // Capa de mapa OpenStreetMap (CartoDB Dark Matter o Standard OSM)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
         var markersGroup = L.layerGroup().addTo(map);
+        var rutaGroup = L.layerGroup().addTo(map);
+        var cinesActuales = [];
+        var destino = null;
 
-        // Icono personalizado para cines
         var cinemaIcon = L.icon({
             iconUrl: 'https://cdn-icons-png.flaticon.com/512/2809/2809590.png',
             iconSize: [38, 38],
@@ -80,36 +71,79 @@
             popupAnchor: [0, -34]
         });
 
+        // Escapa HTML para que datos de la BD no inyecten código en el popup
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+            });
+        }
+
         function cargarCines(cinesJson) {
             markersGroup.clearLayers();
             var cines = typeof cinesJson === 'string' ? JSON.parse(cinesJson) : cinesJson;
-
-            if (!cines || cines.length === 0) return;
+            cinesActuales = cines || [];
+            if (cinesActuales.length === 0) return;
 
             var bounds = [];
-            cines.forEach(function(cine) {
+            cinesActuales.forEach(function (cine, i) {
                 var lat = parseFloat(cine.latitude || cine.lat);
                 var lng = parseFloat(cine.longitude || cine.lng);
-
                 if (isNaN(lat) || isNaN(lng)) return;
 
-                var popupContent = `
-                    <div class="cine-popup">
-                        <h3>📍 ${cine.name || cine.nombre}</h3>
-                        <p><strong>🍿 Película:</strong> ${cine.movieTitle || cine.pelicula || ''}</p>
-                        <p><strong>🏠 Dirección:</strong> ${cine.address || cine.direccion || 'Centro Comercial'}</p>
-                        <div class="badge-horario">⏰ ${cine.showtimes || cine.horarios || '15:00, 18:30, 21:00'}</div>
-                    </div>
-                `;
+                var popupContent =
+                    '<div class="cine-popup">' +
+                    '<h3>📍 ' + esc(cine.name || cine.nombre) + '</h3>' +
+                    '<p><strong>🍿 Película:</strong> ' + esc(cine.movieTitle || cine.pelicula || '') + '</p>' +
+                    '<p><strong>🏠 Dirección:</strong> ' + esc(cine.address || cine.direccion || 'Centro Comercial') + '</p>' +
+                    '<div class="badge-horario">⏰ ' + esc(cine.showtimes || cine.horarios || '15:00, 18:30, 21:00') + '</div>' +
+                    '<button class="btn btn-ruta" onclick="pedirRuta(' + i + ')">🧭 Cómo llegar</button>' +
+                    '</div>';
 
-                var marker = L.marker([lat, lng], { icon: cinemaIcon }).addTo(markersGroup);
-                marker.bindPopup(popupContent);
+                L.marker([lat, lng], { icon: cinemaIcon }).addTo(markersGroup).bindPopup(popupContent);
                 bounds.push([lat, lng]);
             });
 
-            if (bounds.length > 0) {
-                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-            }
+            if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        }
+
+        // JS -> Android: pide permiso, ubicación y ruta
+        function pedirRuta(i) {
+            var c = cinesActuales[i];
+            if (!c || !window.Android) return;
+            var lat = parseFloat(c.latitude || c.lat);
+            var lng = parseFloat(c.longitude || c.lng);
+            destino = { lat: lat, lng: lng };
+            Android.comoLlegar(lat, lng, String(c.name || c.nombre || 'Cine'));
+        }
+
+        // Android -> JS: dibuja la ruta
+        function mostrarRuta(uLat, uLng, geo, distM, durS, nombre) {
+            rutaGroup.clearLayers();
+            var pts = geo.coordinates.map(function (p) { return [p[1], p[0]]; });
+
+            L.polyline(pts, { color: '#E5A645', weight: 6, opacity: 0.9 }).addTo(rutaGroup);
+            L.circleMarker([uLat, uLng], {
+                radius: 8, color: '#ffffff', weight: 3, fillColor: '#2196F3', fillOpacity: 1
+            }).bindTooltip('Tú estás aquí').addTo(rutaGroup);
+
+            map.closePopup();
+            map.fitBounds(pts, { padding: [60, 60] });
+
+            var km = (distM / 1000).toFixed(1);
+            var min = Math.round(durS / 60);
+            var tiempo = min >= 60 ? Math.floor(min / 60) + ' h ' + (min % 60) + ' min' : min + ' min';
+            document.getElementById('routeInfo').innerHTML =
+                '<b>' + esc(nombre) + '</b><br>🚗 ' + km + ' km · ' + tiempo;
+            document.getElementById('routeBar').style.display = 'flex';
+        }
+
+        function limpiarRuta() {
+            rutaGroup.clearLayers();
+            document.getElementById('routeBar').style.display = 'none';
+        }
+
+        function navegarExterno() {
+            if (destino && window.Android) Android.abrirNavegacion(destino.lat, destino.lng);
         }
     </script>
 </body>
